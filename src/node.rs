@@ -1,4 +1,4 @@
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum NodeMessage {
     HasQuery { location: usize, value: u32 },
     HasResponse { location: usize, has: bool },
@@ -8,7 +8,7 @@ pub enum NodeMessage {
 pub struct NodeState<'a> {
     data: &'a Vec<u32>, // set we're testing the other node for
     index: usize,
-    common: Vec<u32>,
+    pub common: Vec<u32>,
 }
 
 impl<'a> NodeState<'a> {
