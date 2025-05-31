@@ -30,6 +30,7 @@ impl<'a> NodeState<'a> {
                 None => NodeMessage::End,
                 Some(val) => {
                     if *val == value {
+                        self.common.push(value);
                         NodeMessage::HasResponse{location, has: true}
                     } else {
                         NodeMessage::HasResponse{location, has: false}
