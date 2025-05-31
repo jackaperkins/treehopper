@@ -18,9 +18,12 @@ fn main() {
 fn protocol(node1: &mut NodeState, node2: &mut NodeState) -> usize {
     let mut message = node1.start();
     let mut counter = 0;
-    while message != NodeMessage::End {
+    loop {
         counter += 1;
         let response = node2.receive(message);
+        if message == NodeMessage::End {
+            break;
+        }
         message = node1.receive(response);
     }
     counter
@@ -64,7 +67,7 @@ fn protocol_odd_lengths() {
     assert_eq!(node2.common, vec![9]);
 
     // prove that we dont spin through elements once the other side hung up
-    assert_eq!(iterations, 3);
+    assert_eq!(iterations, 4);
 }
 
 #[test]
@@ -80,5 +83,5 @@ fn protocol_odd_lengths_reversed() {
     assert_eq!(node2.common, vec![9]);
 
     // initiator hangs up quicker because it's shorter, so only 2 loops
-    assert_eq!(iterations, 2);
+    assert_eq!(iterations, 3);
 }
