@@ -20,10 +20,12 @@ impl<'a> NodeState<'a> {
         }
     }
 
+    /// Call on the intiator node to get first message
     pub fn start(&mut self) -> NodeMessage {
         self.next_query()
     }
 
+    /// feed messages from other peer in here
     pub fn receive(&mut self, message: NodeMessage) -> NodeMessage {
         match message {
             NodeMessage::HasQuery { location, value } => match self.data.get(location) {
@@ -72,6 +74,18 @@ impl<'a> NodeState<'a> {
     }
 }
 
+// tests
+
+#[test]
+fn start_node() {
+    let data = vec![1, 2, 3];
+    let mut node = NodeState::new(&data);
+
+    let message = node.start();
+
+    assert_eq!(message, NodeMessage::HasQuery { location: 0, value: 1 });
+}
+
 #[test]
 fn basic_has_query() {
     let data = vec![1, 2, 3];
@@ -108,15 +122,26 @@ fn basic_has_query() {
     assert_eq!(response3, NodeMessage::End);
 }
 
-
 #[test]
-fn start_node() {
+fn common_state_for_querier() {
     let data = vec![1, 2, 3];
     let mut node = NodeState::new(&data);
 
-    let message = node.start();
+    node.receive(NodeMessage::HasResponse { location: 0, has: true });
+    node.receive(NodeMessage::HasResponse { location: 2, has: true });
 
-    assert_eq!(message, NodeMessage::HasQuery { location: 0, value: 1 });
+    assert_eq!(node.common, vec![1,3]);
+}
+
+#[test]
+fn common_state_for_responder() {
+    let data = vec![1, 2, 3];
+    let mut node = NodeState::new(&data);
+
+    node.receive(NodeMessage::HasQuery { location: 0, value: 1 });
+    node.receive(NodeMessage::HasQuery { location: 2, value: 3 });
+
+    assert_eq!(node.common, vec![1,3]);
 }
 
 #[test]
