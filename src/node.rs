@@ -1,13 +1,13 @@
 #[derive(PartialEq, Debug)]
 pub enum NodeMessage {
     HasQuery { location: usize, value: u32 },
-    HasResponse{ location: usize, has: bool},
+    HasResponse { location: usize, has: bool },
     End,
 }
 
 pub struct NodeState<'a> {
     data: &'a Vec<u32>, // set we're testing the other node for
-    data_pointer: u32,
+    index: usize,
     common: Vec<u32>,
 }
 
@@ -16,7 +16,7 @@ impl<'a> NodeState<'a> {
         NodeState {
             data,
             common: vec![],
-            data_pointer: 0,
+            index: 0,
         }
     }
 
@@ -31,19 +31,46 @@ impl<'a> NodeState<'a> {
                 Some(val) => {
                     if *val == value {
                         self.common.push(value);
-                        NodeMessage::HasResponse{location, has: true}
+                        NodeMessage::HasResponse {
+                            location,
+                            has: true,
+                        }
                     } else {
-                        NodeMessage::HasResponse{location, has: false}
+                        NodeMessage::HasResponse {
+                            location,
+                            has: false,
+                        }
                     }
                 }
             },
-            NodeMessage::HasResponse{location, has} => NodeMessage::End,
+            NodeMessage::HasResponse { location, has } => match (location, has) {
+                (location, true) => match self.data.get(location) {
+                    None => NodeMessage::End,
+                    Some(value) => {
+                        self.common.push(*value);
+                        self.next_query()
+                    }
+                },
+                (_location, false) => self.next_query(),
+            },
             NodeMessage::End => NodeMessage::End,
         }
     }
-}
 
-fn protocol() {}
+    fn next_query(&mut self) -> NodeMessage {
+        let response = if self.index < self.data.len() {
+            NodeMessage::HasQuery {
+                location: self.index,
+                value: self.data[self.index],
+            }
+        } else {
+            NodeMessage::End
+        };
+        self.index += 1;
+
+        response
+    }
+}
 
 #[test]
 fn basic_has_query() {
@@ -53,13 +80,25 @@ fn basic_has_query() {
         location: 0,
         value: 1,
     });
-    assert_eq!(response1, NodeMessage::HasResponse{location: 0, has:true});
+    assert_eq!(
+        response1,
+        NodeMessage::HasResponse {
+            location: 0,
+            has: true
+        }
+    );
 
     let response2 = node.receive(NodeMessage::HasQuery {
         location: 1,
         value: 1,
     });
-    assert_eq!(response2, NodeMessage::HasResponse{location: 1, has:false});
+    assert_eq!(
+        response2,
+        NodeMessage::HasResponse {
+            location: 1,
+            has: false
+        }
+    );
 
     let response3 = node.receive(NodeMessage::HasQuery {
         location: 9,
@@ -67,4 +106,17 @@ fn basic_has_query() {
     });
     // expect end when either side runs out of elements
     assert_eq!(response3, NodeMessage::End);
+}
+
+#[test]
+fn bad_response() {
+    let data = vec![1, 2, 3];
+    let mut node = NodeState::new(&data);
+
+    let response = node.receive(NodeMessage::HasResponse {
+        location: 9,
+        has: true,
+    });
+
+    assert_eq!(response, NodeMessage::End);
 }
