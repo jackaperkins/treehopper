@@ -20,8 +20,8 @@ impl<'a> NodeState<'a> {
         }
     }
 
-    pub fn start() -> NodeMessage {
-        NodeMessage::End
+    pub fn start(&mut self) -> NodeMessage {
+        self.next_query()
     }
 
     pub fn receive(&mut self, message: NodeMessage) -> NodeMessage {
@@ -106,6 +106,17 @@ fn basic_has_query() {
     });
     // expect end when either side runs out of elements
     assert_eq!(response3, NodeMessage::End);
+}
+
+
+#[test]
+fn start_node() {
+    let data = vec![1, 2, 3];
+    let mut node = NodeState::new(&data);
+
+    let message = node.start();
+
+    assert_eq!(message, NodeMessage::HasQuery { location: 0, value: 1 });
 }
 
 #[test]
