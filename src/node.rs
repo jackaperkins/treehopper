@@ -83,7 +83,13 @@ fn start_node() {
 
     let message = node.start();
 
-    assert_eq!(message, NodeMessage::HasQuery { location: 0, value: 1 });
+    assert_eq!(
+        message,
+        NodeMessage::HasQuery {
+            location: 0,
+            value: 1
+        }
+    );
 }
 
 #[test]
@@ -127,10 +133,16 @@ fn common_state_for_querier() {
     let data = vec![1, 2, 3];
     let mut node = NodeState::new(&data);
 
-    node.receive(NodeMessage::HasResponse { location: 0, has: true });
-    node.receive(NodeMessage::HasResponse { location: 2, has: true });
+    node.receive(NodeMessage::HasResponse {
+        location: 0,
+        has: true,
+    });
+    node.receive(NodeMessage::HasResponse {
+        location: 2,
+        has: true,
+    });
 
-    assert_eq!(node.common, vec![1,3]);
+    assert_eq!(node.common, vec![1, 3]);
 }
 
 #[test]
@@ -138,10 +150,16 @@ fn common_state_for_responder() {
     let data = vec![1, 2, 3];
     let mut node = NodeState::new(&data);
 
-    node.receive(NodeMessage::HasQuery { location: 0, value: 1 });
-    node.receive(NodeMessage::HasQuery { location: 2, value: 3 });
+    node.receive(NodeMessage::HasQuery {
+        location: 0,
+        value: 1,
+    });
+    node.receive(NodeMessage::HasQuery {
+        location: 2,
+        value: 3,
+    });
 
-    assert_eq!(node.common, vec![1,3]);
+    assert_eq!(node.common, vec![1, 3]);
 }
 
 #[test]

@@ -16,7 +16,7 @@ fn protocol(node1: &mut NodeState, node2: &mut NodeState) {
 }
 
 #[test]
-fn basic_protocol () {
+fn basic_protocol() {
     let data = vec![1];
     let mut node1 = NodeState::new(&data);
     let mut node2 = NodeState::new(&data);
@@ -27,9 +27,10 @@ fn basic_protocol () {
     assert_eq!(node2.common, vec![1]);
 }
 
-fn basic_protocol_partial () {
-    let data = vec![7,9];
-    let data2 = vec![8,9];
+#[test]
+fn basic_protocol_partial() {
+    let data = vec![7, 9];
+    let data2 = vec![8, 9];
     let mut node1 = NodeState::new(&data);
     let mut node2 = NodeState::new(&data2);
 
