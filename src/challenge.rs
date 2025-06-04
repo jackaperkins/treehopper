@@ -18,13 +18,14 @@
 //! - a sends `Done` when it runs out of elements
 //! - in the case that either side recieves `Done` or `Fail` it should close the network connection and finish
 use std::collections::HashSet;
+use sha2::{Digest, Sha256};
 
 use rand::{Rng, distr::Alphanumeric};
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct ChallengeReponsePair {
     pub salt: String,
-    pub hash: String,
+    pub hash: Vec<u8>,
 }
 
 // a is the initiator, b is the responder.
@@ -32,7 +33,7 @@ pub struct ChallengeReponsePair {
 pub enum NodeMessage {
     Start,                                          // a starts
     Initialize { salt: String }, // b agrees and chooses a salt for the initial state
-    ChallengeQuery { hash: String }, // a queries with the salted hash of a particular value
+    ChallengeQuery { hash: Vec<u8> }, // a queries with the salted hash of a particular value
     ChallengeReponse(Option<ChallengeReponsePair>), // response of either None or Some with new proof for a that b has the unhashed value
     Fail { reason: String },                        //
     Done,                                           // a or b should be able to hang up anytime
@@ -51,12 +52,12 @@ pub struct Node<'a> {
     data_index: usize,
     first_challenge: bool,
     salt: Option<String>,
-    data_hashed: Vec<String>,
+    data_hashed: Vec<Vec<u8>>,
     /// data we have in common with the peer
     data_common: HashSet<String>,
 }
 
-impl<'a> Node<'a> {
+impl Node<'_> {
     #[allow(unused)]
     pub fn new(data: &[String], node_type: NodeType) -> Node {
         Node {
@@ -193,10 +194,9 @@ fn generate_salt() -> String {
         .collect()
 }
 
-/// fake function hashing something, replace with real hashing later
 #[allow(unused)]
-fn hash_value(value: &str, salt: &str) -> String {
-    value.to_owned() + salt
+fn hash_value(value: &str, salt: &str) -> Vec<u8> {
+    Sha256::digest(value.to_owned() + salt).to_vec()
 }
 
 /// Phony protocol, in reality we'd only have one side of this but the logic would be the same.
