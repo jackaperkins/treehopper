@@ -104,13 +104,15 @@ impl<'a> Node<'a> {
                             self.next_challenge()
                         }
                         None => NodeMessage::Fail {
-                            reason: format!("Protocol responder gave bad new salt challenge for current data")
+                            reason: format!(
+                                "Protocol responder gave bad new salt challenge for current data"
+                            ),
                         },
                     },
                 },
                 NodeMessage::Done => NodeMessage::Done,
                 NodeMessage::Fail { reason } => NodeMessage::Fail {
-                    reason: format!("Protocol responder failed: {}", reason)
+                    reason: format!("Protocol responder failed: {}", reason),
                 },
                 _ => {
                     return NodeMessage::Fail {
@@ -201,7 +203,7 @@ fn generate_salt() -> String {
 
 /// fake function hashing something, replace with real hashing later
 #[allow(unused)]
-fn hash_value(value: &String, salt: &String) -> String {
+fn hash_value(value: &str, salt: &str) -> String {
     value.to_owned() + salt
 }
 
@@ -209,12 +211,10 @@ fn hash_value(value: &String, salt: &String) -> String {
 /// In the case that we're the follower we'd know because we'd start by receiving the `Start` message
 /// In both cases we'd close our connection once we recieved Done or Fail
 #[allow(unused)]
-fn protocol(leader: &mut Node, follower: &mut Node) {
+fn protocol(leader: &mut Node, follower: &mut Node) -> NodeMessage {
     let mut message = leader.start();
     loop {
-        println!("Message from leader: {:?}", message);
         let reply = follower.recieve_message(message.clone());
-        println!("Message from follower: {:?}", reply);
         if matches!(&message, NodeMessage::Fail { reason: _ }) {
             break;
         }
@@ -223,8 +223,8 @@ fn protocol(leader: &mut Node, follower: &mut Node) {
         }
         message = leader.recieve_message(reply);
     }
+    message
 }
-
 
 // tests
 
@@ -247,9 +247,11 @@ fn protocol_basics() {
     let mut n1 = Node::new(&data, NodeType::Leader);
     let mut n2 = Node::new(&data, NodeType::Follower);
 
-    protocol(&mut n1, &mut n2);
+    let message = protocol(&mut n1, &mut n2);
 
-    let data_set =  HashSet::from_iter(data.iter().map(String::from));
+    assert_eq!(message, NodeMessage::Done);
+
+    let data_set = HashSet::from_iter(data.iter().map(String::from));
     assert_eq!(n1.data_common, data_set);
     assert_eq!(n2.data_common, data_set);
 }
@@ -263,7 +265,7 @@ fn protocol_order() {
 
     protocol(&mut n1, &mut n2);
 
-    let data_set =  HashSet::from_iter(data.iter().map(String::from));
+    let data_set = HashSet::from_iter(data.iter().map(String::from));
     assert_eq!(n1.data_common, data_set);
     assert_eq!(n2.data_common, data_set);
 }
@@ -281,6 +283,17 @@ fn protocol_no_common() {
     assert_eq!(n2.data_common.len(), 0);
 }
 
+#[test]
+fn protocol_misconfigured_peer() {
+    let data = fix_array(vec!["1", "b", "c"]);
+    let mut n1 = Node::new(&data, NodeType::Leader);
+    let mut n2 = Node::new(&data, NodeType::Leader);
+
+    let message = protocol(&mut n1, &mut n2);
+
+    // we expect a failure from n2 to be passed back through n1 so we know our protocol was a fail
+    assert_eq!(message, NodeMessage::Fail { reason: "Protocol responder failed: Unsupported message for this node state: Start".to_owned() });
+}
 
 // TODO add further tests with 'evil' peers who send messages at wrong times?
 
