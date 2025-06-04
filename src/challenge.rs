@@ -189,19 +189,23 @@ fn hash_value(value: &String, salt: &String) -> String {
     value.to_owned() + salt
 }
 
-#[allow(unused)]
-fn use_node() {
-    let mut n = Node::new(&[], NodeType::Follower);
-    n.start();
-    n.next_challenge();
+fn protocol(leader: &mut Node, follower: &mut Node) {
+    let mut message = leader.start();
+    loop {
+        let reply = follower.recieve_message(message.clone());
+        if matches!(&message, NodeMessage::Fail { reason: _ }) {
+            break;
+        }
+        if matches!(&message, NodeMessage::Done) {
+            break;
+        }
+        message = leader.recieve_message(reply);
+    }
 }
 
 #[test]
 fn initialization() {
-    let data = vec!["a", "b", "c"]
-        .into_iter()
-        .map(String::from)
-        .collect::<Vec<String>>();
+    let data = fix_array(vec!["a", "b", "c"]);
     let mut n = Node::new(&data, NodeType::Follower);
 
     let response = n.recieve_message(NodeMessage::Start);
@@ -212,3 +216,16 @@ fn initialization() {
     assert!(result);
 }
 
+#[test]
+fn protocol_basics() {
+    // let data = fix_array(vec!["a", "b", "c"]);
+    let data = ["1", "b", "c"];
+    let mut n1 = Node::new(&data, NodeType::Follower);
+    let mut n2 = Node::new(&data, NodeType::Follower);
+    protocol(&mut n1, &mut n2);
+    assert_eq!(n1.data_common, data);
+}
+
+fn fix_array(input: Vec<&str>) -> Vec<String> {
+    input.into_iter().map(String::from).collect::<Vec<String>>()
+}
