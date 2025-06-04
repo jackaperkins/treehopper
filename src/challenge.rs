@@ -1,17 +1,26 @@
+//! Naive attempt #2, now a more complex multi-stage protocol with a salted hash challenge.
+//!
+//! Construct a node given the secret `data` and whether it is the protocol `Leader` (a) or `Follower` (b)
+//!
+//! Nodes communicate by sending each other `NodeMessage`
+//!
+//! ## The Protocol
+//! - a sends b `Start`
+//! - b generates a salt value, hashes its data and shares the salt with a via `Initialize`
+//! - a hashes its data with the same salt value
+//! - a iterates each data, sending its hashed value to b via `ChallengeQuery`
+//!   - if b doesn't have the matching hashed data it knows it's not in the set
+//!     - b returns `ChallengeReponse(None)`
+//!   - if b has the same value, it knows they share the same element and makes a note
+//!     - b returns `ChallengeReponse(Some(new salt, new hashed data))` as a challenge for a
+//!     - a computes its own local version of (data + new salt) to check if b really has original data, making note
+//!       - in the case that a cannot derive the same new hash, it sends `Fail` and should quit
+//! - a sends `Done` when it runs out of elements
+//! - in the case that either side recieves `Done` or `Fail` it should close the network connection and finish
+use std::collections::HashSet;
+
 use rand::{Rng, distr::Alphanumeric};
 
-/// Naive attempt #2, now a more complex multi-stage protocol with a salted hash challenge to build our common set
-/// a (leader) starts b (follower)
-/// b generates a salt value, hashes its data and shares the salt with a
-/// a hashes its data with the same salt value
-/// a iterates each data, sending its hashed value with b
-///   - if b doesn't have the matching hashed data it knows it's not in the set
-///     b returns None
-///   - if b has the same value, it knows they share the same element and makes a note
-///     b returns either None or Some(new salt, new hashed data) as a challenge for a
-///     a computes its own local version of (data + new salt) to check if b really has original data, making note
-///       - in the case that a cannot derive the same new hash, it sends Fail and should quit
-/// a sends done when it runs out of elements
 #[derive(PartialEq, Debug, Clone)]
 pub struct ChallengeReponsePair {
     pub salt: String,
@@ -30,6 +39,7 @@ pub enum NodeMessage {
 }
 
 // simple state machine
+#[allow(unused)]
 pub enum NodeType {
     Leader,
     Follower,
@@ -39,10 +49,11 @@ pub struct Node<'a> {
     node_type: NodeType,
     data: &'a [String],
     data_index: usize,
+    first_challenge: bool,
     salt: Option<String>,
     data_hashed: Vec<String>,
     /// data we have in common with the peer
-    data_common: Vec<String>,
+    data_common: HashSet<String>,
 }
 
 impl<'a> Node<'a> {
@@ -51,9 +62,10 @@ impl<'a> Node<'a> {
             node_type,
             data,
             data_index: 0,
+            first_challenge: true,
             salt: None,
             data_hashed: vec![],
-            data_common: vec![],
+            data_common: HashSet::new(),
         }
     }
 
@@ -87,18 +99,18 @@ impl<'a> Node<'a> {
                         Some(original_data) => {
                             let new_hash = hash_value(&original_data, &response2.salt);
                             if new_hash == response2.hash {
-                                self.data_common.push(original_data.clone());
+                                self.data_common.insert(original_data.clone());
                             }
                             self.next_challenge()
                         }
                         None => NodeMessage::Fail {
-                            reason: "Protocol responder failed".to_owned(),
+                            reason: format!("Protocol responder gave bad new salt challenge for current data")
                         },
                     },
                 },
                 NodeMessage::Done => NodeMessage::Done,
-                NodeMessage::Fail { reason: _ } => NodeMessage::Fail {
-                    reason: "Protocol responder failed".to_owned(),
+                NodeMessage::Fail { reason } => NodeMessage::Fail {
+                    reason: format!("Protocol responder failed: {}", reason)
                 },
                 _ => {
                     return NodeMessage::Fail {
@@ -131,7 +143,7 @@ impl<'a> Node<'a> {
                             let original_data = self.data[index].clone();
                             let new_salt = generate_salt();
                             let new_hash = hash_value(&original_data, &new_salt);
-                            self.data_common.push(original_data);
+                            self.data_common.insert(original_data);
                             NodeMessage::ChallengeReponse(Some(ChallengeReponsePair {
                                 salt: new_salt,
                                 hash: new_hash,
@@ -151,13 +163,17 @@ impl<'a> Node<'a> {
     }
 
     fn next_challenge(&mut self) -> NodeMessage {
+        if self.first_challenge {
+            self.first_challenge = false;
+        } else {
+            self.data_index += 1;
+        }
         match self.data_hashed.get(self.data_index) {
             None => NodeMessage::Done,
             Some(next_hashed_data) => {
                 let message = NodeMessage::ChallengeQuery {
                     hash: next_hashed_data.clone(),
                 };
-                self.data_index += 1;
                 return message;
             }
         }
@@ -189,10 +205,16 @@ fn hash_value(value: &String, salt: &String) -> String {
     value.to_owned() + salt
 }
 
+/// Phony protocol, in reality we'd only have one side of this but the logic would be the same.
+/// In the case that we're the follower we'd know because we'd start by receiving the `Start` message
+/// In both cases we'd close our connection once we recieved Done or Fail
+#[allow(unused)]
 fn protocol(leader: &mut Node, follower: &mut Node) {
     let mut message = leader.start();
     loop {
+        println!("Message from leader: {:?}", message);
         let reply = follower.recieve_message(message.clone());
+        println!("Message from follower: {:?}", reply);
         if matches!(&message, NodeMessage::Fail { reason: _ }) {
             break;
         }
@@ -202,6 +224,9 @@ fn protocol(leader: &mut Node, follower: &mut Node) {
         message = leader.recieve_message(reply);
     }
 }
+
+
+// tests
 
 #[test]
 fn initialization() {
@@ -218,14 +243,48 @@ fn initialization() {
 
 #[test]
 fn protocol_basics() {
-    // let data = fix_array(vec!["a", "b", "c"]);
-    let data = ["1", "b", "c"];
-    let mut n1 = Node::new(&data, NodeType::Follower);
+    let data = fix_array(vec!["1", "b", "c"]);
+    let mut n1 = Node::new(&data, NodeType::Leader);
     let mut n2 = Node::new(&data, NodeType::Follower);
+
     protocol(&mut n1, &mut n2);
-    assert_eq!(n1.data_common, data);
+
+    let data_set =  HashSet::from_iter(data.iter().map(String::from));
+    assert_eq!(n1.data_common, data_set);
+    assert_eq!(n2.data_common, data_set);
 }
 
+#[test]
+fn protocol_order() {
+    let data = fix_array(vec!["1", "b", "c"]);
+    let data2 = fix_array(vec!["b", "c", "1"]);
+    let mut n1 = Node::new(&data, NodeType::Leader);
+    let mut n2 = Node::new(&data2, NodeType::Follower);
+
+    protocol(&mut n1, &mut n2);
+
+    let data_set =  HashSet::from_iter(data.iter().map(String::from));
+    assert_eq!(n1.data_common, data_set);
+    assert_eq!(n2.data_common, data_set);
+}
+
+#[test]
+fn protocol_no_common() {
+    let data = fix_array(vec!["1", "2", "3"]);
+    let data2 = fix_array(vec!["a", "b", "c"]);
+    let mut n1 = Node::new(&data, NodeType::Leader);
+    let mut n2 = Node::new(&data2, NodeType::Follower);
+
+    protocol(&mut n1, &mut n2);
+
+    assert_eq!(n1.data_common.len(), 0);
+    assert_eq!(n2.data_common.len(), 0);
+}
+
+
+// TODO add further tests with 'evil' peers who send messages at wrong times?
+
+#[allow(unused)]
 fn fix_array(input: Vec<&str>) -> Vec<String> {
     input.into_iter().map(String::from).collect::<Vec<String>>()
 }
