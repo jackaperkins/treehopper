@@ -57,6 +57,7 @@ pub struct Node<'a> {
 }
 
 impl<'a> Node<'a> {
+    #[allow(unused)]
     pub fn new(data: &[String], node_type: NodeType) -> Node {
         Node {
             node_type,
@@ -82,11 +83,9 @@ impl<'a> Node<'a> {
         match self.node_type {
             NodeType::Leader => match message {
                 NodeMessage::Initialize { salt } => match self.salt {
-                    Some(_) => {
-                        return NodeMessage::Fail {
-                            reason: "Node recieved initialize when already initialized".to_string(),
-                        };
-                    }
+                    Some(_) => NodeMessage::Fail {
+                        reason: "Node recieved initialize when already initialized".to_string(),
+                    },
                     None => {
                         self.salt = Some(salt);
                         self.hash_data();
@@ -97,16 +96,16 @@ impl<'a> Node<'a> {
                     None => self.next_challenge(),
                     Some(response2) => match self.data.get(self.data_index) {
                         Some(original_data) => {
-                            let new_hash = hash_value(&original_data, &response2.salt);
+                            let new_hash = hash_value(original_data, &response2.salt);
                             if new_hash == response2.hash {
                                 self.data_common.insert(original_data.clone());
                             }
                             self.next_challenge()
                         }
                         None => NodeMessage::Fail {
-                            reason: format!(
+                            reason:
                                 "Protocol responder gave bad new salt challenge for current data"
-                            ),
+                                    .to_string(),
                         },
                     },
                 },
@@ -114,11 +113,9 @@ impl<'a> Node<'a> {
                 NodeMessage::Fail { reason } => NodeMessage::Fail {
                     reason: format!("Protocol responder failed: {}", reason),
                 },
-                _ => {
-                    return NodeMessage::Fail {
-                        reason: format!("Unsupported message for this node state: {:?}", message),
-                    };
-                }
+                _ => NodeMessage::Fail {
+                    reason: format!("Unsupported message for this node state: {:?}", message),
+                },
             },
             NodeType::Follower => match message {
                 NodeMessage::Start => {
@@ -130,13 +127,11 @@ impl<'a> Node<'a> {
                     let salt = generate_salt();
                     self.salt = Some(salt.clone());
                     self.hash_data();
-                    NodeMessage::Initialize { salt: salt }
+                    NodeMessage::Initialize { salt }
                 }
-                NodeMessage::Initialize { salt: _ } => {
-                    return NodeMessage::Fail {
-                        reason: "Node recieved initialize when already initialized".to_string(),
-                    };
-                }
+                NodeMessage::Initialize { salt: _ } => NodeMessage::Fail {
+                    reason: "Node recieved initialize when already initialized".to_string(),
+                },
                 NodeMessage::ChallengeQuery { hash } => {
                     let found = self.data_hashed.iter().position(|h| *h == hash);
                     match found {
@@ -172,12 +167,9 @@ impl<'a> Node<'a> {
         }
         match self.data_hashed.get(self.data_index) {
             None => NodeMessage::Done,
-            Some(next_hashed_data) => {
-                let message = NodeMessage::ChallengeQuery {
-                    hash: next_hashed_data.clone(),
-                };
-                return message;
-            }
+            Some(next_hashed_data) => NodeMessage::ChallengeQuery {
+                hash: next_hashed_data.clone(),
+            },
         }
     }
 
@@ -186,7 +178,7 @@ impl<'a> Node<'a> {
         match &self.salt {
             None => {}
             Some(salt) => {
-                self.data_hashed = self.data.iter().map(|val| hash_value(val, &salt)).collect();
+                self.data_hashed = self.data.iter().map(|val| hash_value(val, salt)).collect();
             }
         }
     }
@@ -292,7 +284,13 @@ fn protocol_misconfigured_peer() {
     let message = protocol(&mut n1, &mut n2);
 
     // we expect a failure from n2 to be passed back through n1 so we know our protocol was a fail
-    assert_eq!(message, NodeMessage::Fail { reason: "Protocol responder failed: Unsupported message for this node state: Start".to_owned() });
+    assert_eq!(
+        message,
+        NodeMessage::Fail {
+            reason: "Protocol responder failed: Unsupported message for this node state: Start"
+                .to_owned()
+        }
+    );
 }
 
 // TODO add further tests with 'evil' peers who send messages at wrong times?

@@ -1,10 +1,10 @@
 /// Naive attempt #1, thinking about the basics of protocols in rust
 /// We check common elements position-wise between two arrays, wrapped in NodeStates. Return a counter of how many iterations it took
-/// 
+///
 /// For example `[1,2,3]` and `[1,2,3]` have common elements `[1,2,3]`
-/// 
+///
 /// But `[1,2,3]` and `[3,2,1]` only have `[2]` in common
-/// 
+///
 /// This is only metaphorically related to walking a tree, this code serves no useful purpose now
 
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -21,6 +21,7 @@ pub struct NodeState<'a> {
 }
 
 impl<'a> NodeState<'a> {
+    #[allow(unused)]
     pub fn new(data: &'a Vec<u32>) -> Self {
         NodeState {
             data,
