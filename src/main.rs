@@ -4,5 +4,6 @@
 
 mod challenge;
 mod simple;
+mod third;
 
 fn main() {}
